@@ -2,14 +2,20 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 //------------------------------------------------------------------------------------
+// Defining I/O Pins
+//------------------------------------------------------------------------------------
 #define       BUTTON    D4        // Connectivity ReInitiate Button
 #define       TWI_FREQ  400000L   // I2C Frequency Setting To 400KHZ
+//------------------------------------------------------------------------------------
+// BUTTON Variables
 //------------------------------------------------------------------------------------
 int           ButtonState;
 int           LastButtonState   = LOW;
 int           LastDebounceTime  = 0;
 int           DebounceDelay     = 25;
-const String  clientName       = "TWO";
+const String  clientName       = "THREE";
+//------------------------------------------------------------------------------------
+// Authentication Variables
 //------------------------------------------------------------------------------------
 char*         serverSSID;
 char*         serverPassword;

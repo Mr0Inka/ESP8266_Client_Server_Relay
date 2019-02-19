@@ -2,20 +2,14 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 //------------------------------------------------------------------------------------
-// Defining I/O Pins
-//------------------------------------------------------------------------------------
 #define       BUTTON    D4        // Connectivity ReInitiate Button
 #define       TWI_FREQ  400000L   // I2C Frequency Setting To 400KHZ
-//------------------------------------------------------------------------------------
-// BUTTON Variables
 //------------------------------------------------------------------------------------
 int           ButtonState;
 int           LastButtonState   = LOW;
 int           LastDebounceTime  = 0;
 int           DebounceDelay     = 25;
 const String  clientName       = "THREE";
-//------------------------------------------------------------------------------------
-// Authentication Variables
 //------------------------------------------------------------------------------------
 char*         serverSSID;
 char*         serverPassword;
@@ -42,7 +36,6 @@ void setup()
   CheckConnectivity();            // Checking For Connection
   Serial.println("!-- Client Device Connected --!");
 
-  // Printing IP Address --------------------------------------------------
   Serial.println("Connected To      : " + String(WiFi.SSID()));
   Serial.println("Signal Strenght   : " + String(WiFi.RSSI()) + " dBm");
   Serial.print  ("Server IP Address : ");
@@ -61,6 +54,7 @@ void loop()
   long currMill = millis();
   if(currMill > (lastPong + 2500)){
     Serial.println("Connection lost");
+    CheckConnectivity();
   }
   if (currMill > lastPing) {
     lastPing = millis() + pingInterval;
@@ -119,7 +113,7 @@ void sendReq()
 void pingServer() {
   btnClient.println(clientName + ":ping");
   btnClient.flush();
-  Serial.println("PING");
+  //Serial.println("PING");
 }
 
 void readServer() {
@@ -131,7 +125,7 @@ void readServer() {
         if(clientMsg == "pong"){
           lastPong = millis();
         }
-        Serial.println(clientMsg);
+        //Serial.println(clientMsg);
       }
     }
   } else {

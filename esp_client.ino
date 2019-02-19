@@ -2,20 +2,15 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 //------------------------------------------------------------------------------------
-// Defining I/O Pins
-//------------------------------------------------------------------------------------
 #define       BUTTON    D4        // Connectivity ReInitiate Button
 #define       TWI_FREQ  400000L   // I2C Frequency Setting To 400KHZ
-//------------------------------------------------------------------------------------
-// BUTTON Variables
 //------------------------------------------------------------------------------------
 int           ButtonState;
 int           LastButtonState   = LOW;
 int           LastDebounceTime  = 0;
 int           DebounceDelay     = 25;
 const String  clientName       = "THREE";
-//------------------------------------------------------------------------------------
-// Authentication Variables
+const String  btnMode = "HOLD";  //HOLD or TOGGLE
 //------------------------------------------------------------------------------------
 char*         serverSSID;
 char*         serverPassword;
@@ -59,10 +54,10 @@ void setup()
 void loop()
 {
   long currMill = millis();
-  if(currMill > (lastPong + 2500)){
+  if (currMill > (lastPong + 2500)) {
     Serial.println("Connection lost");
     Serial.println("Resetting the connection");
-    WiFi.disconnect(); 
+    WiFi.disconnect();
     delay(1000);
     setup();
   }
@@ -71,7 +66,11 @@ void loop()
     pingServer();
   }
   readServer();
-  ReadButton();
+  if (btnMode == "TOGGLE") {
+    ReadButton();
+  } else if (btnMode == "HOLD") {
+    ReadHold();
+  }
 }
 
 //====================================================================================
@@ -95,6 +94,24 @@ void ReadButton()
     }
   }
   LastButtonState = reading;
+}
+
+void ReadHold()
+{
+  int reading = digitalRead(BUTTON);
+  if (reading == LOW) {
+    Serial.println("Holding...");
+    btnClient.println(clientName + ":holdstart");
+    btnClient.flush();
+    while (reading == LOW) {
+      reading = digitalRead(BUTTON);
+      Serial.println("...");
+    }
+    lastPong = millis();
+    btnClient.println(clientName + ":holdend");
+    btnClient.flush();
+    Serial.println("...released!");
+  }
 }
 
 //====================================================================================
@@ -138,7 +155,7 @@ void readServer() {
       while (btnClient.available()) {
         String clientMsg = btnClient.readStringUntil('\n');
         clientMsg.trim();
-        if(clientMsg == "pong"){
+        if (clientMsg == "pong") {
           lastPong = millis();
         }
         //Serial.println(clientMsg);

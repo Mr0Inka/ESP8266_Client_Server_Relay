@@ -2,7 +2,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <FastLED.h>
-
 //------------------------------------------------------------------------------------
 #define NUM_LEDS 42
 #define DATA_PIN 4
@@ -146,7 +145,38 @@ void IsClients() {
             pings[i] = currMill;
             APclient[i].println("pong");
             //Serial.println(" [P] Ping after + " + String(lastPing) + "ms [" + ident + "]");
+          } else if(event == "holdstart"){
+            pings[i] = currMill;
+            Serial.println(" [+] Holding [" + ident + "]");
+            if (ident == "ONE") {
+              forceLED(0, true);
+            };
+            if (ident == "TWO") {
+              forceLED(1, true);
+            };
+            if (ident == "THREE") {
+              forceLED(2, true);
+            };
+            if (ident == "FOUR") {
+              forceLED(3, true);
+            };
+          } else if(event == "holdend"){
+            pings[i] = currMill;
+            Serial.println(" [+] Stopped [" + ident + "]");
+            if (ident == "ONE") {
+              forceLED(0, false);
+            };
+            if (ident == "TWO") {
+              forceLED(1, false);
+            };
+            if (ident == "THREE") {
+              forceLED(2, false);
+            };
+            if (ident == "FOUR") {
+              forceLED(3, false);
+            };
           } else {
+            pings[i] = currMill;
             Serial.println(" [?] Unknown event: " + event + " [" + ident + "]");
           }
         }
@@ -204,7 +234,6 @@ void triggerLed(int LEDRange) {
     for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
       leds[i] = CRGB::Black;
       FastLED.show();
-      delay(5);
     }
   } else {
     Serial.println(" [L] Turned on LED_" + String(LEDRange + 1));
@@ -212,7 +241,24 @@ void triggerLed(int LEDRange) {
     for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
       leds[i] = CRGB::White;
       FastLED.show();
-      delay(5);
+    }
+  }
+}
+
+void forceLED(int LEDRange, bool onMode) {
+  if (onMode == false) {
+    Serial.println(" [L] Forced off LED_" + String(LEDRange + 1));
+    ledStat[LEDRange] = false;
+    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
+      leds[i] = CRGB::Black;
+      FastLED.show();
+    }
+  } else {
+    Serial.println(" [L] Forced on LED_" + String(LEDRange + 1));
+    ledStat[LEDRange] = true;
+    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
+      leds[i] = CRGB::White;
+      FastLED.show();
     }
   }
 }

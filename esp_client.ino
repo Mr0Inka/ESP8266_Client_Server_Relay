@@ -2,20 +2,14 @@
 #include <Wire.h>
 #include <ESP8266WiFi.h>
 //------------------------------------------------------------------------------------
-// Defining I/O Pins
-//------------------------------------------------------------------------------------
 #define       BUTTON    D4        // Connectivity ReInitiate Button
 #define       TWI_FREQ  400000L   // I2C Frequency Setting To 400KHZ
-//------------------------------------------------------------------------------------
-// BUTTON Variables
 //------------------------------------------------------------------------------------
 int           ButtonState;
 int           LastButtonState   = LOW;
 int           LastDebounceTime  = 0;
 int           DebounceDelay     = 25;
 const String  clientName       = "TWO";
-//------------------------------------------------------------------------------------
-// Authentication Variables
 //------------------------------------------------------------------------------------
 char*         serverSSID;
 char*         serverPassword;
@@ -35,7 +29,7 @@ void setup()
   Wire.setClock(TWI_FREQ);        // Setting The Frequency MPU9250 Require
   Serial.begin(115200);           // Computer Communication
   pinMode(BUTTON, INPUT_PULLUP);  // Initiate Connectivity
-
+  pinMode(2, OUTPUT);
   WiFi.mode(WIFI_STA);            // To Avoid Broadcasting An SSID
   WiFi.begin("ESP_Relay");          // The SSID That We Want To Connect To
   Serial.println("!--- Connecting To " + WiFi.SSID() + " ---!");
@@ -62,6 +56,8 @@ void loop()
   if(currMill > (lastPong + 2500)){
     Serial.println("Connection lost");
     Serial.println("Resetting the connection");
+    WiFi.disconnect(); 
+    delay(1000);
     setup();
   }
   if (currMill > lastPing) {
@@ -99,7 +95,13 @@ void ReadButton()
 
 void CheckConnectivity() {
   while (WiFi.status() != WL_CONNECTED) {
-    for (int i = 0; i < 10; i++) {
+    digitalWrite(2, LOW);
+    for (int i = 0; i < 5; i++) {
+      Serial.print(".");
+      delay(30);
+    }
+    digitalWrite(2, HIGH);
+    for (int i = 0; i < 5; i++) {
       Serial.print(".");
       delay(30);
     }

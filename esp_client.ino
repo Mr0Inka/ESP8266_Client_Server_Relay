@@ -1,3 +1,4 @@
+const String  clientName = "1";
 //------------------------------------------------------------------------------------
 #include <Wire.h>
 #include <ESP8266WiFi.h>
@@ -5,12 +6,10 @@
 #define       BUTTON    D4        // Connectivity ReInitiate Button
 #define       TWI_FREQ  400000L   // I2C Frequency Setting To 400KHZ
 //------------------------------------------------------------------------------------
-int           ButtonState;
-int           LastButtonState   = LOW;
-int           LastDebounceTime  = 0;
-int           DebounceDelay     = 25;
-const String  clientName       = "THREE";
-const String  btnMode = "HOLD";  //HOLD or TOGGLE
+long          nextPing;
+int           pingInterval = 2000;
+long          lastPong;
+int           lastButtonState   = HIGH;
 //------------------------------------------------------------------------------------
 char*         serverSSID;
 char*         serverPassword;
@@ -18,34 +17,31 @@ IPAddress     serverAddr(192, 168, 4, 1);
 WiFiClient    btnClient;
 //====================================================================================
 
-long lastPing;
-int pingInterval = 2000;
-
-long lastPong;
-
-
-void setup()
-{
-  Wire.begin();                   // Begginning The I2C
-  Wire.setClock(TWI_FREQ);        // Setting The Frequency MPU9250 Require
-  Serial.begin(115200);           // Computer Communication
-  pinMode(BUTTON, INPUT_PULLUP);  // Initiate Connectivity
+void setup() {
+  Serial.println("");
+  Serial.println("=========================================");
+  Wire.begin();                   // Begin I2C
+  Wire.setClock(TWI_FREQ);        // Set frequency
+  Serial.begin(115200);
+  pinMode(BUTTON, INPUT_PULLUP);
   pinMode(2, OUTPUT);
-  WiFi.mode(WIFI_STA);            // To Avoid Broadcasting An SSID
-  WiFi.begin("ESP_Relay");          // The SSID That We Want To Connect To
-  Serial.println("!--- Connecting To " + WiFi.SSID() + " ---!");
+  WiFi.mode(WIFI_STA);            // Avoid broadcasting SSID
+  WiFi.begin("ESP_Relay");        // Server SSID
+  Serial.println(" [>] Connecting to " + WiFi.SSID());
   CheckConnectivity();            // Checking For Connection
-  Serial.println("!-- Client Device Connected --!");
+  Serial.println(" [>] Client connected");
 
-  // Printing IP Address --------------------------------------------------
-  Serial.println("Connected To      : " + String(WiFi.SSID()));
-  Serial.println("Signal Strenght   : " + String(WiFi.RSSI()) + " dBm");
-  Serial.print  ("Server IP Address : ");
+  Serial.println(" [>] Connected To      : " + String(WiFi.SSID()));
+  Serial.println(" [>] Signal Strenght   : " + String(WiFi.RSSI()) + " dBm");
+  Serial.print  (" [>] Server IP Address : ");
   Serial.println(serverAddr);
-  Serial.print  ("Device IP Address : ");
+  Serial.print  (" [>] Device IP Address : ");
   Serial.println(WiFi.localIP());
-  lastPing = millis() + pingInterval;
+  Serial.println("=========================================");
+
+  nextPing = millis() + pingInterval;
   lastPong = millis();
+
   sendReq();
 }
 
@@ -54,63 +50,38 @@ void setup()
 void loop()
 {
   long currMill = millis();
+
   if (currMill > (lastPong + 2500)) {
-    Serial.println("Connection lost");
-    Serial.println("Resetting the connection");
+    Serial.println(" [>] Connection lost - Restarting...");
     WiFi.disconnect();
     delay(1000);
     setup();
   }
-  if (currMill > lastPing) {
-    lastPing = millis() + pingInterval;
+
+  if (currMill > nextPing) {
+    nextPing = millis() + pingInterval;
     pingServer();
   }
+
   readServer();
-  if (btnMode == "TOGGLE") {
-    ReadButton();
-  } else if (btnMode == "HOLD") {
-    ReadHold();
-  }
+  readBtn();
 }
 
 //====================================================================================
 
-void ReadButton()
-{
+void readBtn() {
   int reading = digitalRead(BUTTON);
-  if (reading != LastButtonState) {
-    LastDebounceTime = millis();
-  }
-
-  if ((millis() - LastDebounceTime) > DebounceDelay) {
-    if (reading != ButtonState) {
-      ButtonState = reading;
-
-      if (ButtonState == LOW) {
-        Serial.println(clientName);
-        btnClient.println(clientName + ":pulse");
-        btnClient.flush();
-      }
+  if (reading != lastButtonState) {
+    if (reading == HIGH) {
+      Serial.println(" [>] Button released");
+      btnClient.println(clientName + ":released");
+      btnClient.flush();
+    } else {
+      Serial.println(" [>] Button pressed");
+      btnClient.println(clientName + ":pressed");
+      btnClient.flush();
     }
-  }
-  LastButtonState = reading;
-}
-
-void ReadHold()
-{
-  int reading = digitalRead(BUTTON);
-  if (reading == LOW) {
-    Serial.println("Holding...");
-    btnClient.println(clientName + ":holdstart");
-    btnClient.flush();
-    while (reading == LOW) {
-      reading = digitalRead(BUTTON);
-      Serial.println("...");
-    }
-    lastPong = millis();
-    btnClient.println(clientName + ":holdend");
-    btnClient.flush();
-    Serial.println("...released!");
+    lastButtonState = reading;
   }
 }
 
@@ -118,35 +89,28 @@ void ReadHold()
 
 void CheckConnectivity() {
   while (WiFi.status() != WL_CONNECTED) {
+    Serial.println(" [>] Finding server...");
     digitalWrite(2, LOW);
-    for (int i = 0; i < 5; i++) {
-      Serial.print(".");
-      delay(30);
-    }
+    delay(250);
     digitalWrite(2, HIGH);
-    for (int i = 0; i < 5; i++) {
-      Serial.print(".");
-      delay(30);
-    }
-    Serial.println("");
+    delay(250);
   }
 }
 
 //====================================================================================
 
-void sendReq()
-{
+void sendReq() {
   btnClient.stop();
   if (btnClient.connect(serverAddr, 9001)) {
-    Serial.println    (clientName + ":connect");
+    Serial.println    (" [+] " + clientName + ":connect");
     btnClient.println (clientName + ":connect");
   }
 }
 
 void pingServer() {
+  Serial.println(" [>] " + clientName + ":ping");
   btnClient.println(clientName + ":ping");
   btnClient.flush();
-  //Serial.println("PING");
 }
 
 void readServer() {
@@ -158,12 +122,11 @@ void readServer() {
         if (clientMsg == "pong") {
           lastPong = millis();
         }
-        //Serial.println(clientMsg);
+        Serial.println(" [>] Server:" + clientMsg);
       }
     }
   } else {
-    Serial.println("Somehow got disconnected");
+    Serial.println(" [>] Lost connection...");
   }
 }
-
 //====================================================================================

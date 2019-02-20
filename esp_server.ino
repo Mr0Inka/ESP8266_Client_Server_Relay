@@ -1,92 +1,95 @@
 //------------------------------------------------------------------------------------
+String modeOne   = "toggle";
+String modeTwo   = "timed";
+String modeThree = "hold";
+String modeFour  = "toggled";
+
+int timeOne   = 0;
+int timeTwo   = 2500;
+int timeThree = 3000;
+int timeFour  = 5000;
+//------------------------------------------------------------------------------------
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <FastLED.h>
+int connectRange[4][2] = {{0, 1},{3, 4},{6, 7},{9, 10}};
+int ranges[4][2] = {{19, 14},{26, 21},{33, 28},{40, 35}};
 //------------------------------------------------------------------------------------
 #define NUM_LEDS 42
 #define DATA_PIN 4
 CRGB leds[NUM_LEDS];
 //------------------------------------------------------------------------------------
+int timeOut = 2500;
+int pingCheckInterval = 500;
+long nextCheck;
+//------------------------------------------------------------------------------------
 char*       APssid;          // SERVER WIFI NAME
 char*       APpass;          // SERVER PASSWORD
 //------------------------------------------------------------------------------------
-#define     maxClients     4           // MAXIMUM NUMBER OF CLIENTS
+#define     maxClients 4               // MAXIMUM NUMBER OF CLIENTS
 WiFiServer  APserver(9001);            // THE SERVER AND THE PORT NUMBER
 WiFiClient  APclient[maxClients];      // THE SERVER CLIENTS
 //====================================================================================
 
-int pings[] = {false, false, false, false};
-String names[] = {"na", "na", "na", "na"};
-int connectRange[4][2] = {
-  {0, 1},
-  {3, 4},
-  {6, 7},
-  {9, 10},
-};
-bool ledStat[] = {false, false, false, false};
-int ranges[4][2] = {
-  {19, 14},
-  {26, 21},
-  {33, 28},  
-  {40, 35}
-};
-
-int timeOut = 2500;
-int pingCheckInterval = 500;
-
-long nextCheck;
+bool outState[] = {false, false, false, false};            //Current led state
+int     pings[] = {false, false, false, false};            //Last ping time in ms
+String  names[] = {"na", "na", "na", "na"};                //Client identity names
+long  turnOff[] = {false, false, false, false};            //Timepoint to disable trigger
 
 void setup() {
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-  nextCheck = millis() + timeOut;
   Serial.begin(115200);
-  delay(500);
-  SetWifi("ESP_Relay", "");  //WIFI NAME AND PASSWORD
+  SetWifi("ESP_Relay", "");
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CRGB::Black;
   }
   FastLED.show();
-  setStat(0, false);
-  setStat(1, false);
-  setStat(2, false);
-  setStat(3, false);
+  setStat(0, false); //Set connection status to false (turn off connection LEDs)
+  setStat(1, false); //Set connection status to false (turn off connection LEDs)
+  setStat(2, false); //Set connection status to false (turn off connection LEDs)
+  setStat(3, false); //Set connection status to false (turn off connection LEDs)
+  nextCheck = millis() + timeOut;
 }
 
 //====================================================================================
 
 void loop() {
   long currMill = millis();
+
   if (nextCheck < currMill) {
     nextCheck = currMill + pingCheckInterval;
     checkPings();
   }
-  IsClients();
+
+  checkClient();
 }
 
 //====================================================================================
 
 void SetWifi(char* Name, char* Password) {
+  Serial.println("=========================================");
   WiFi.disconnect();
   WiFi.mode(WIFI_AP_STA);
-  Serial.println("WIFI Mode : AccessPoint Station");
+  Serial.println(" [>] WIFI Mode : AccessPoint Station");
   APssid  = Name;
   APpass  = Password;
   WiFi.softAP(APssid, APpass);
-  Serial.println("WIFI < " + String(APssid) + " > ... Started");
+  Serial.println(" [>] " + String(APssid) + " started");
   delay(1000);
   IPAddress IP = WiFi.softAPIP();
-  Serial.print("AccessPoint IP : ");
+  Serial.print(" [>] AccessPoint IP : ");
   Serial.println(IP);
   APserver.begin();
-  Serial.println("Server Started");
+  Serial.println(" [>] Server running...");
+  Serial.println("=========================================");
 }
 
 //====================================================================================
 
-void IsClients() {
+void checkClient() {
   long currMill = millis();
-  if (APserver.hasClient()) {
-    for (int i = 0; i < maxClients; i++) {  //find free/disconnected spot
+  if (APserver.hasClient()) { //Check if client is actually connected
+    for (int i = 0; i < maxClients; i++) {
       if (!APclient[i] || !APclient[i].connected()) {
         if (APclient[i]) {
           APclient[i].stop();
@@ -95,86 +98,31 @@ void IsClients() {
         continue;
       }
     }
-    // no free / disconnected spot so reject
     WiFiClient APclient = APserver.available();
     APclient.stop();
   }
 
-  //check clients for data -------------------------------------------------------
-
-  for (int i = 0; i < maxClients; i++) {
+  for (int i = 0; i < maxClients; i++) { //Check for data    
     if (APclient[i] && APclient[i].connected()) {
+      checkTriggerTimeout(i, currMill);
       if (APclient[i].available()) {
         while (APclient[i].available()) {
           String clientMsg = APclient[i].readStringUntil('\n');
           clientMsg.trim();
           String ident = getValue(clientMsg, ':', 0);
           String event = getValue(clientMsg, ':', 1);
-          if (event == "connect") {
-            Serial.println(" [o] Connect [" + ident + "]");
-            pings[i] = currMill;
-            names[i] = ident;
-            if (ident == "ONE") {
-              setStat(0, true);
-            };
-            if (ident == "TWO") {
-              setStat(1, true);
-            };
-            if (ident == "THREE") {
-              setStat(2, true);
-            };
-            if (ident == "FOUR") {
-              setStat(3, true);
-            };
-          } else if (event == "pulse") {
-            //Serial.println(" [+] Pulse [" + ident + "]");
-            if (ident == "ONE") {
-              triggerLed(0);
-            };
-            if (ident == "TWO") {
-              triggerLed(1);
-            };
-            if (ident == "THREE") {
-              triggerLed(2);
-            };
-            if (ident == "FOUR") {
-              triggerLed(3);
-            };
+
+          if (event == "connect") {  //Handle new connection
+            clientConnect(ident, i, currMill);
+          } else if (event == "pressed") {
+            clientPressed(ident, i, currMill);
+          } else if (event == "released") {
+            clientReleased(ident, i, currMill);
           } else if (event == "ping") {
             long lastPing =  currMill - pings[i];
             pings[i] = currMill;
             APclient[i].println("pong");
             //Serial.println(" [P] Ping after + " + String(lastPing) + "ms [" + ident + "]");
-          } else if(event == "holdstart"){
-            pings[i] = currMill;
-            Serial.println(" [+] Holding [" + ident + "]");
-            if (ident == "ONE") {
-              forceLED(0, true);
-            };
-            if (ident == "TWO") {
-              forceLED(1, true);
-            };
-            if (ident == "THREE") {
-              forceLED(2, true);
-            };
-            if (ident == "FOUR") {
-              forceLED(3, true);
-            };
-          } else if(event == "holdend"){
-            pings[i] = currMill;
-            Serial.println(" [+] Stopped [" + ident + "]");
-            if (ident == "ONE") {
-              forceLED(0, false);
-            };
-            if (ident == "TWO") {
-              forceLED(1, false);
-            };
-            if (ident == "THREE") {
-              forceLED(2, false);
-            };
-            if (ident == "FOUR") {
-              forceLED(3, false);
-            };
           } else {
             pings[i] = currMill;
             Serial.println(" [?] Unknown event: " + event + " [" + ident + "]");
@@ -185,24 +133,72 @@ void IsClients() {
   }
 }
 
+void clientConnect(String identity, int slot, long currTime) {
+  Serial.println(" [o] Button connected [" + identity + " / " + getModeSetting(identity) + "]");
+  pings[slot] = currTime;
+  names[slot] = identity;
+  setStat(nameAddress(identity), true);
+}
+
+void clientPressed(String identity, int slot, long currTime) {
+  Serial.println(" [o] Button pressed [" + identity + "]");
+  pings[slot] = currTime;
+  if (getModeSetting(identity) == "toggle") {
+    if(outState[slot]){
+      trigger(nameAddress(identity), false, slot);
+    } else {
+      trigger(nameAddress(identity), true, slot);
+    }
+  } else if (getModeSetting(identity) == "hold") {
+      trigger(nameAddress(identity), true, slot);
+  } else if (getModeSetting(identity) == "timed") {
+      trigger(nameAddress(identity), true, slot);
+      turnOff[slot] = millis() + getTimeSetting(identity);
+  }
+}
+
+void clientReleased(String identity, int slot, long currTime) {
+  Serial.println(" [o] Button released [" + identity + "]");
+  pings[slot] = currTime;
+
+  if (getModeSetting(identity) == "hold") {
+      trigger(nameAddress(identity), false, slot);
+  }
+}
+
+void trigger(int number, bool newState, int slot){
+  if(newState){
+    Serial.println(" [C] Activated " + String(number + 1));
+    outState[slot] = true;
+    for (int i = ranges[number][0]; i >= ranges[number][1]; i--) {
+      leds[i] = CRGB::White;
+    }
+    FastLED.show();
+  } else {
+    Serial.println(" [C] Deactivated " + String(number + 1));
+    outState[slot] = false;
+    for (int i = ranges[number][0]; i >= ranges[number][1]; i--) {
+      leds[i] = CRGB::Black;
+    }
+    FastLED.show();
+  }
+}
+
+void checkTriggerTimeout(int slot, long currTime){
+  if(turnOff[slot] && currTime > turnOff[slot]){
+    trigger(nameAddress(names[slot]), false, slot);
+    turnOff[slot] = false;
+  }
+}
+
+
 void checkPings() {
   long currMill = millis();
   for (int i = 0; i < maxClients; i++) {
     if (pings[i]) {
       if ((currMill - pings[i]) > timeOut) {
         Serial.println(" [X] Disconnect [" + names[i] + "]");
-        if (names[i] == "ONE") {
-          setStat(0, false);
-        };
-        if (names[i] == "TWO") {
-          setStat(1, false);
-        };
-        if (names[i] == "THREE") {
-          setStat(2, false);
-        };
-        if (names[i] == "FOUR") {
-          setStat(3, false);
-        };
+        setStat(nameAddress(names[i]), false);
         pings[i] = false;
         names[i] = "na";
         APclient[i].stop();
@@ -227,44 +223,8 @@ String getValue(String data, char separator, int index) {
   return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
-void triggerLed(int LEDRange) {
-  if (ledStat[LEDRange]) {
-    Serial.println(" [L] Turned off LED_" + String(LEDRange + 1));
-    ledStat[LEDRange] = false;
-    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
-      leds[i] = CRGB::Black;
-      FastLED.show();
-    }
-  } else {
-    Serial.println(" [L] Turned on LED_" + String(LEDRange + 1));
-    ledStat[LEDRange] = true;
-    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
-      leds[i] = CRGB::White;
-      FastLED.show();
-    }
-  }
-}
-
-void forceLED(int LEDRange, bool onMode) {
-  if (onMode == false) {
-    Serial.println(" [L] Forced off LED_" + String(LEDRange + 1));
-    ledStat[LEDRange] = false;
-    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
-      leds[i] = CRGB::Black;
-      FastLED.show();
-    }
-  } else {
-    Serial.println(" [L] Forced on LED_" + String(LEDRange + 1));
-    ledStat[LEDRange] = true;
-    for (int i = ranges[LEDRange][0]; i >= ranges[LEDRange][1]; i--) {
-      leds[i] = CRGB::White;
-      FastLED.show();
-    }
-  }
-}
-
-void setStat(int LEDNum, bool LEDstatus) {
-  if (LEDstatus) {
+void setStat(int LEDNum, bool outStatus) {
+  if (outStatus) {
     for (int i = connectRange[LEDNum][0]; i <= connectRange[LEDNum][1]; i++) {
       leds[i] = CRGB::Blue;
     }
@@ -276,3 +236,39 @@ void setStat(int LEDNum, bool LEDstatus) {
   FastLED.show();
 }
 //====================================================================================
+
+String getModeSetting(String identity){
+  if (identity == "1") {
+    return modeOne;
+  } else if (identity == "2") {
+    return modeTwo;
+  } else if (identity == "3") {
+    return modeThree;
+  } else if (identity == "4") {
+    return modeFour;
+  }
+}
+
+int getTimeSetting(String identity){
+  if (identity == "1") {
+    return timeOne;
+  } else if (identity == "2") {
+    return timeTwo;
+  } else if (identity == "3") {
+    return timeThree;
+  } else if (identity == "4") {
+    return timeFour;
+  }
+}
+
+int nameAddress(String identity){
+  if (identity == "1") {
+    return 0;
+  } else if (identity == "2") {
+    return 1;
+  } else if (identity == "3") {
+    return 2;
+  } else if (identity == "4") {
+    return 3;
+  }
+}

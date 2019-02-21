@@ -16,5 +16,5 @@ This sketch needs to be written onto generic ESP8266 NodeMCUs. There is one serv
 > When powering up, the clients will blink while trying to find the server. When the server is in range, they will connect to it and stop blinking. Now you can use the push buttons to toggle, hold or enable your channels for X milliseconds.
 
 ### Notes:
-..* test
++ Buttons and server will identify a lost connection and reconnect by themselves (uses a ping/pong system)
 
